@@ -25,10 +25,11 @@ calsync input-calendar-url output-calendar-url <--input-username user> <--input-
 import calsync
 from requests.auth import HTTPBasicAuth
 
-new_events, updated_events = calsync.sync(input_calendar=<input_calendar_url>,
-                                          output_calendar=<output_calendar_url>,
-                                          input_auth=HTTPBasicAuth(<username>, <password>), # Optional
-                                          output_auth=HTTPBasicAuth(username, password)) # Optional
+new_events, updated_events = calsync.sync(
+  input_calendar=<input_calendar_url>,
+  output_calendar=<output_calendar_url>,
+  input_auth=HTTPBasicAuth(<username>, <password>), # Optional
+  output_auth=HTTPBasicAuth(<username>, <password>)) # Optional
 ```
 
 ### Usage to import facebook events into a CalDAV collection
