@@ -56,7 +56,7 @@ def save_event(url: str, auth, event):
     response.raise_for_status()
 
 
-def sync(input_calendar: str, output_calendar: str, input_auth: str, output_auth: str, dry_run: bool = False):
+def sync(input_calendar: str, output_calendar: str, input_auth = None, output_auth = None, dry_run: bool = False):
     input_events = events_from_calendar(read_calendar(input_calendar, input_auth))
     output_events = events_from_calendar(read_calendar(output_calendar, output_auth))
 
