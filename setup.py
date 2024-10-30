@@ -8,7 +8,7 @@ setup(
         "console_scripts": ["calsync = calsync:main"]
         },
     install_requires=[
-        'icalendar==4.0.1',
+        'icalendar==6.0.1',
         'requests>=2.24.0',
         'click==8.1.3'
         ]
