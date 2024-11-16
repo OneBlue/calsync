@@ -4,7 +4,10 @@ import logging
 import icalendar.cal
 import requests
 import click
+import traceback
 from requests.auth import HTTPBasicAuth
+from xml.etree import ElementTree
+from xml.sax.saxutils import escape
 
 logger = logging.getLogger(__name__)
 
@@ -38,21 +41,69 @@ def describe_event(event) -> str:
 
     return description or '<invalid-event>'
 
+def lookup_existing_event_url(calendar: str, auth, uid: str):
+    with requests.Session() as session:
+        session.auth = auth
 
-def save_event(url: str, auth, event):
+        query = f'''
+        <C:calendar-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+            <D:prop>
+              <D:getetag/>
+            </D:prop>
+            <C:filter>
+              <C:comp-filter name="VCALENDAR">
+                <C:comp-filter name="VEVENT">
+                  <C:prop-filter name="UID">
+                    <C:text-match>{escape(uid)}</C:text-match>
+                  </C:prop-filter>
+                </C:comp-filter>
+              </C:comp-filter>
+            </C:filter>
+            </C:calendar-query>'''
+
+        response = session.request(url=calendar, method='REPORT', data=query)
+        response.raise_for_status()
+
+    tree = ElementTree.fromstring(response.text)
+
+    entries = tree.findall('./{DAV:}response/{DAV:}href')
+    if len(entries) != 1:
+        raise NotFoundException(f'Unique event with UID {uid} not found ({len(entries)} matches)')
+
+    # The url might contain the collection name, but all that we want is the file name
+    return f'{calendar}/{entries[0].text.split("/")[-1]}'
+
+def save_event(url: str, auth, event, update: bool):
     name = event['UID']
-    if not name.endswith('.ics'):
-        name += '.ics' # Note: this makes the assumption that the caldav server event file matches the UID, which might not be true with all implementations
 
-    if not url.endswith('/'):
-        url += '/'
+    event_url = None
+    if update:
+        # Some calendar implementation don't guarantee that event URL's matches their UID
+        # So before trying to save the event, look up its actual URL, if the server supports propfind
+
+        try:
+            event_url = lookup_existing_event_url(url, auth, name)
+            logging.debug(f'UID lookup for "{name}" returned: {event_url}')
+        except:
+            logging.warning(f'Failed to look up URL for event: {name}, {traceback.format_exc()}')
+
+
+    # If this is a new event, or no matching URL was found, construct our own based on the UID
+    if event_url is None:
+        if not name.endswith('.ics'):
+            name += '.ics' # Note: this makes the assumption that the caldav server event file matches the UID, which might not be true with all implementations
+
+        if not url.endswith('/'):
+            event_url += '/'
+
+        event_url += name
 
     calendar = icalendar.Calendar()
     calendar.add_component(event)
     calendar['VERSION'] = '2.0'
     calendar['PRODID'] = 'calsync'
 
-    response = requests.put(url + name, auth=auth, data=calendar.to_ical(), timeout=300)
+    response = requests.put(event_url, auth=auth, data=calendar.to_ical(), timeout=300)
     response.raise_for_status()
 
 
@@ -82,7 +133,7 @@ def sync(input_calendar: str, output_calendar: str, input_auth = None, output_au
         if dry_run:
             continue
 
-        save_event(output_calendar, output_auth, e)
+        save_event(output_calendar, output_auth, e, update=False)
 
     for e in events_to_update:
         logging.info(f'Updating event for: {describe_event(e)}. SEQUENCE={e["SEQUENCE"]}')
@@ -90,7 +141,7 @@ def sync(input_calendar: str, output_calendar: str, input_auth = None, output_au
         if dry_run:
             continue
 
-        save_event(output_calendar, output_auth, e)
+        save_event(output_calendar, output_auth, e, update=True)
 
     return new_events, events_to_update
 
