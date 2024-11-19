@@ -93,10 +93,7 @@ def save_event(url: str, auth, event, update: bool):
         if not name.endswith('.ics'):
             name += '.ics' # Note: this makes the assumption that the caldav server event file matches the UID, which might not be true with all implementations
 
-        if not url.endswith('/'):
-            event_url += '/'
-
-        event_url += name
+        event_url = f'{url}{"/" if not url.endswith("/") else ""}{name}'
 
     calendar = icalendar.Calendar()
     calendar.add_component(event)
