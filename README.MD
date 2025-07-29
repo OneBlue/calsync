@@ -40,4 +40,10 @@ new_events, updated_events = calsync.sync(
 
 Sample command line: ` calsync <url-copied-from-facebook> <caldav-calendar-url> --output-username <caldav-username> --output-password <caldav-password>`
 
+### Usage to import partiful calendar events into a CalDAV collection
 
+* Get the calendar collection following [these instructions](https://help.partiful.com/hc/en-us/sections/26025196887707--Calendar-Sync)
+* Use this url as the input URL with calsync (not authentication needed)
+
+
+Sample command line: ` calsync <url-copied-from-partiful> <caldav-calendar-url> --output-username <caldav-username> --output-password <caldav-password>`
