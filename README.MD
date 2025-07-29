@@ -16,7 +16,8 @@ calsync can be used either as a command line tool, or via a python invocation.
 
 ### Command line usage
 
-calsync input-calendar-url output-calendar-url <--input-username user> <--input-password password> <--output-username> <--output-password> <--dry-run>
+calsync <input-calendar-url> <output-calendar-url> [--input-username <user>] [--input-password <password>] [--output-username <username>] [--output-password <password>] [--dry-run] [--manual-sequence]
+
 
 
 ### Python usage
@@ -46,4 +47,6 @@ Sample command line: ` calsync <url-copied-from-facebook> <caldav-calendar-url> 
 * Use this url as the input URL with calsync (not authentication needed)
 
 
-Sample command line: ` calsync <url-copied-from-partiful> <caldav-calendar-url> --output-username <caldav-username> --output-password <caldav-password>`
+Sample command line: ` calsync <url-copied-from-partiful> <caldav-calendar-url> --output-username <caldav-username> --output-password <caldav-password> --manual-sequence`
+
+Note: `--manual-sequence` is required because partiful doesn't use `SEQUENCE` fields to track event updates.

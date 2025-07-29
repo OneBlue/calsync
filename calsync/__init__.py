@@ -24,10 +24,16 @@ def events_from_calendar(calendar) -> list:
     return [e for e in calendar.subcomponents if is_event(e)]
 
 def find_matching_event(event, collection: list):
-    matches = [e for e in collection if e.get('UID', None) == event['UID']]
+    def match(e):
+        if e.get('UID', None) == event['UID']:
+            return True
+
+        return 'URL' in event and e.get('URL', None) == event['URL']
+
+    matches = [e for e in collection if match(e)]
 
     if len(matches) > 1:
-        raise RuntimeError(f'Found more than one match for UID={event["UID"]}')
+        raise RuntimeError(f'Found more than one match for UID={event["UID"]}, URL={event.get("URL", None)}')
 
     return matches[0] if matches else None
 
@@ -38,6 +44,9 @@ def describe_event(event) -> str:
 
     if 'UID' in event:
         description += f'(UID={event["UID"]})'
+
+    if 'URL' in event:
+        description += f'(URL={event["URL"]})'
 
     return description or '<invalid-event>'
 
@@ -103,8 +112,30 @@ def save_event(url: str, auth, event, update: bool):
     response = requests.put(event_url, auth=auth, data=calendar.to_ical(), timeout=300)
     response.raise_for_status()
 
+def needs_update(new_event, existing_event) -> bool:
+     # This is mostly for partiful events, which don't have stable UID's, DTSTAMP, or SEQUENCE
 
-def sync(input_calendar: str, output_calendar: str, input_auth = None, output_auth = None, dry_run: bool = False):
+    ignored_keys = ['UID', 'DTSTAMP']
+    new_keys = set([e for e in new_event.keys() if e not in ignored_keys])
+    old_keys = set([e for e in existing_event.keys() if e not in ignored_keys])
+
+    # If fields were added, update the event
+    added_fields = [e for e in new_keys if e not in old_keys]
+    if added_fields:
+        logging.debug(f'Updating "{describe_event(new_event)}" becaused of added field: {added_fields}')
+        return True
+
+    # Otherwise compare fields one by one
+
+    for e in new_keys:
+        if new_event[e] != existing_event[e]:
+            logging.debug(f'Updating "{describe_event(new_event)}" becaused of changed field: "{e}"')
+
+            return True
+
+    return False
+
+def sync(input_calendar: str, output_calendar: str, input_auth = None, output_auth = None, dry_run: bool = False, manual_sequence: bool = False):
     input_events = events_from_calendar(read_calendar(input_calendar, input_auth))
     output_events = events_from_calendar(read_calendar(output_calendar, output_auth))
 
@@ -116,6 +147,14 @@ def sync(input_calendar: str, output_calendar: str, input_auth = None, output_au
         existing_event = find_matching_event(e, output_events)
         if existing_event is None:
             new_events.append(e)
+
+        # Carry the previous event UID (used for calendar that don't have stable UID's, like partiful)
+        e['UID'] = existing_event['UID']
+
+        if manual_sequence:
+            if needs_update(e, existing_event):
+                events_to_update.append(e)
+
         elif 'SEQUENCE' not in e:
             logging.warn(f'Event {e["UID"]} has no SEQUENCE information, skipping update')
             continue
@@ -133,7 +172,7 @@ def sync(input_calendar: str, output_calendar: str, input_auth = None, output_au
         save_event(output_calendar, output_auth, e, update=False)
 
     for e in events_to_update:
-        logging.info(f'Updating event for: {describe_event(e)}. SEQUENCE={e["SEQUENCE"]}')
+        logging.info(f'Updating event for: {describe_event(e)}. SEQUENCE={e.get("SEQUENCE", None)}')
 
         if dry_run:
             continue
@@ -152,7 +191,8 @@ def sync(input_calendar: str, output_calendar: str, input_auth = None, output_au
 @click.option('--output-password', default=None)
 @click.option('--debug', is_flag=True)
 @click.option('--dry-run', is_flag=True)
-def main(input_calendar: str, output_calendar: str, input_username: str, input_password: str, output_username: str, output_password: str, debug: bool, dry_run: bool):
+@click.option('--manual-sequence', is_flag=True)
+def main(input_calendar: str, output_calendar: str, input_username: str, input_password: str, output_username: str, output_password: str, debug: bool, dry_run: bool, manual_sequence: bool):
     try:
         logging.basicConfig(level=logging.DEBUG)
 
@@ -167,7 +207,7 @@ def main(input_calendar: str, output_calendar: str, input_username: str, input_p
             assert output_password is not None
             output_auth = HTTPBasicAuth(output_username, output_password)
 
-        sync(input_calendar, output_calendar, input_auth, output_auth, dry_run)
+        sync(input_calendar, output_calendar, input_auth, output_auth, dry_run, manual_sequence)
 
     except:
         if not debug:
