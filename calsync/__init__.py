@@ -147,6 +147,7 @@ def sync(input_calendar: str, output_calendar: str, input_auth = None, output_au
         existing_event = find_matching_event(e, output_events)
         if existing_event is None:
             new_events.append(e)
+            continue
 
         # Carry the previous event UID (used for calendar that don't have stable UID's, like partiful)
         e['UID'] = existing_event['UID']
