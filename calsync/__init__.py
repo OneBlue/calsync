@@ -5,6 +5,7 @@ import icalendar.cal
 import requests
 import click
 import traceback
+from typing import Callable
 from requests.auth import HTTPBasicAuth
 from xml.etree import ElementTree
 from xml.sax.saxutils import escape
@@ -126,7 +127,6 @@ def needs_update(new_event, existing_event) -> bool:
         return True
 
     # Otherwise compare fields one by one
-
     for e in new_keys:
         if new_event[e] != existing_event[e]:
             logging.debug(f'Updating "{describe_event(new_event)}" becaused of changed field: "{e}"')
@@ -135,7 +135,7 @@ def needs_update(new_event, existing_event) -> bool:
 
     return False
 
-def sync(input_calendar: str, output_calendar: str, input_auth = None, output_auth = None, dry_run: bool = False, manual_sequence: bool = False):
+def sync(input_calendar: str, output_calendar: str, input_auth = None, output_auth = None, dry_run: bool = False, manual_sequence: bool = False, update_pred = needs_update):
     input_events = events_from_calendar(read_calendar(input_calendar, input_auth))
     output_events = events_from_calendar(read_calendar(output_calendar, output_auth))
 
@@ -153,7 +153,7 @@ def sync(input_calendar: str, output_calendar: str, input_auth = None, output_au
         e['UID'] = existing_event['UID']
 
         if manual_sequence:
-            if needs_update(e, existing_event):
+            if update_pred(e, existing_event):
                 events_to_update.append(e)
 
         elif 'SEQUENCE' not in e:
